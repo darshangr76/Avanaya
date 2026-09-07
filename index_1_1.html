@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ORCA-AI — Fishing Safety Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/[email protected]/dist/leaflet.css" />
+<style>
+  :root{
+    --bg:        #070B12;
+    --bg-soft:   #0A1019;
+    --panel:     rgba(14,20,31,0.82);
+    --panel-2:   rgba(20,28,42,0.72);
+    --card:      rgba(255,255,255,0.035);
+    --card-hover:rgba(255,255,255,0.06);
+    --border:    rgba(148,178,209,0.14);
+    --border-2:  rgba(148,178,209,0.24);
+    --ink:       #E9F1F8;
+    --ink-dim:   #7E93AC;
+    --ink-faint: #46566C;
+    --accent:    #2FE6C4;
+    --accent-2:  #7C9CFF;
+    --accent-glow: rgba(47,230,196,0.35);
+    --go:        #33E6A6;
+    --go-bg:     rgba(51,230,166,0.12);
+    --caution:   #FFB648;
+    --caution-bg:rgba(255,182,72,0.13);
+    --nogo:      #FF5D6C;
+    --nogo-bg:   rgba(255,93,108,0.14);
+    --mono: 'JetBrains Mono', monospace;
+    --display: 'Space Grotesk', sans-serif;
+    --body: 'Inter', sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    background:
+      radial-gradient(circle at 18% -10%, rgba(47,230,196,0.10), transparent 45%),
+      radial-gradient(circle at 100% 100%, rgba(124,156,255,0.08), transparent 50%),
+      repeating-linear-gradient(0deg, rgba(126,147,172,0.035) 0px, rgba(126,147,172,0.035) 1px, transparent 1px, transparent 44px),
+      repeating-linear-gradient(90deg, rgba(126,147,172,0.035) 0px, rgba(126,147,172,0.035) 1px, transparent 1px, transparent 44px),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--body);
+    overflow:hidden;
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:0.001ms !important; animation-iteration-count:1 !important; transition-duration:0.001ms !important;}
+  }
+
+  .console{ height:100vh; display:flex; flex-direction:column; }
+
+  /* ---------- TOPBAR ---------- */
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 26px;
+    background:var(--panel);
+    backdrop-filter:blur(14px);
+    border-bottom:1px solid var(--border);
+    position:relative;
+    flex-shrink:0;
+    z-index:10;
+  }
+  .topbar::after{
+    content:''; position:absolute; left:0; right:0; bottom:-1px; height:1px;
+    background:linear-gradient(90deg, transparent, var(--accent-glow) 30%, var(--accent-glow) 70%, transparent);
+  }
+  .brand{ display:flex; align-items:center; gap:13px; }
+  .brand-mark{
+    width:38px; height:38px; border-radius:11px;
+    background:linear-gradient(155deg, rgba(47,230,196,0.18), rgba(124,156,255,0.10));
+    border:1px solid var(--border-2);
+    display:flex; align-items:center; justify-content:center;
+    position:relative;
+    box-shadow:0 0 18px rgba(47,230,196,0.12);
+  }
+  .brand-mark span{ font-family:var(--display); font-size:12px; color:var(--accent); font-weight:700; letter-spacing:0.5px; }
+  .brand-text .name{ font-family:var(--display); font-weight:700; font-size:18px; letter-spacing:0.2px; }
+  .brand-text .tagline{ font-family:var(--mono); font-size:10px; color:var(--ink-dim); letter-spacing:1.4px; text-transform:uppercase; margin-top:1px; }
+
+  .topbar-right{ display:flex; align-items:center; gap:20px; }
+  .status-chip{
+    display:flex; align-items:center; gap:8px;
+    font-family:var(--mono); font-size:10.5px; color:var(--ink-dim); letter-spacing:0.4px;
+    background:var(--card); border:1px solid var(--border); border-radius:20px;
+    padding:6px 12px 6px 10px;
+  }
+  .pulse-dot{
+    width:7px; height:7px; border-radius:50%; background:var(--go);
+    box-shadow:0 0 0 0 var(--go-bg);
+    animation:pulse 2s infinite;
+  }
+  @keyframes pulse{
+    0%{ box-shadow:0 0 0 0 rgba(51,230,166,0.45); }
+    70%{ box-shadow:0 0 0 7px rgba(51,230,166,0); }
+    100%{ box-shadow:0 0 0 0 rgba(51,230,166,0); }
+  }
+  .scenario-switch{ display:flex; gap:3px; background:var(--card); padding:4px; border-radius:12px; border:1px solid var(--border); }
+  .scenario-switch button{
+    font-family:var(--mono); font-size:10.5px; letter-spacing:0.3px;
+    background:transparent; border:none; color:var(--ink-dim);
+    padding:8px 13px; border-radius:9px; cursor:pointer;
+    transition:all 0.18s ease;
+  }
+  .scenario-switch button:hover{ color:var(--ink); }
+  .scenario-switch button.active{
+    background:linear-gradient(135deg, rgba(47,230,196,0.9), rgba(124,156,255,0.85));
+    color:#061014; font-weight:600;
+    box-shadow:0 2px 14px rgba(47,230,196,0.28);
+  }
+
+  /* ---------- MAIN GRID ---------- */
+  .main-grid{ flex:1; display:grid; grid-template-columns:420px 1fr; overflow:hidden; }
+
+  .left-panel{
+    border-right:1px solid var(--border);
+    display:flex; flex-direction:column;
+    overflow-y:auto;
+    background:var(--bg-soft);
+  }
+  .left-panel::-webkit-scrollbar{ width:6px; }
+  .left-panel::-webkit-scrollbar-thumb{ background:var(--border-2); border-radius:3px; }
+
+  /* ---------- QUERY BOX ---------- */
+  .query-section{ padding:20px 20px 16px; border-bottom:1px solid var(--border); }
+  .eyebrow{
+    font-family:var(--mono); font-size:10px; letter-spacing:1.6px; text-transform:uppercase;
+    color:var(--accent); margin-bottom:11px; display:block; font-weight:600;
+  }
+  .query-form{ display:flex; gap:8px; }
+  .query-input{
+    flex:1; background:var(--card); border:1px solid var(--border); border-radius:10px;
+    padding:12px 14px; color:var(--ink); font-family:var(--body); font-size:13.5px;
+    outline:none; transition:border-color 0.15s ease, background 0.15s ease;
+  }
+  .query-input:focus{ border-color:var(--accent); background:rgba(47,230,196,0.05); }
+  .query-input::placeholder{ color:var(--ink-faint); }
+  .query-send{
+    background:linear-gradient(135deg, var(--accent), var(--accent-2));
+    border:none; border-radius:10px; padding:0 18px;
+    color:#061014; font-weight:600; cursor:pointer; font-family:var(--display); font-size:13px;
+    transition:filter 0.15s ease, transform 0.15s ease;
+  }
+  .query-send:hover{ filter:brightness(1.12); transform:translateY(-1px); }
+  .chip-row{ display:flex; gap:6px; flex-wrap:wrap; margin-top:11px; }
+  .chip{
+    font-family:var(--mono); font-size:10px; color:var(--ink-dim);
+    border:1px solid var(--border); border-radius:20px; padding:6px 11px; cursor:pointer;
+    transition:all 0.15s ease; background:var(--card);
+  }
+  .chip:hover{ border-color:var(--accent); color:var(--accent); }
+
+  /* ---------- AGENT FEED ---------- */
+  .feed-section{ padding:18px 20px; border-bottom:1px solid var(--border); }
+  .agent-row{
+    display:flex; align-items:flex-start; gap:11px;
+    padding:10px 11px;
+    margin-bottom:6px;
+    border-radius:10px;
+    background:var(--card);
+    border:1px solid transparent;
+    opacity:0; transform:translateY(4px);
+    animation:agentIn 0.35s ease forwards;
+    transition:border-color 0.15s ease, background 0.15s ease;
+  }
+  .agent-row:hover{ border-color:var(--border); background:var(--card-hover); }
+  .agent-row:last-child{ margin-bottom:0; }
+  @keyframes agentIn{ to{ opacity:1; transform:translateY(0); } }
+  .agent-dot{
+    width:8px; height:8px; border-radius:50%; margin-top:5px; flex-shrink:0;
+  }
+  .agent-dot.go{ background:var(--go); box-shadow:0 0 8px var(--go); }
+  .agent-dot.caution{ background:var(--caution); box-shadow:0 0 8px var(--caution); }
+  .agent-dot.nogo{ background:var(--nogo); box-shadow:0 0 8px var(--nogo); }
+  .agent-dot.pending{ background:var(--ink-faint); }
+  .agent-body{ flex:1; min-width:0; }
+  .agent-name{ font-family:var(--mono); font-size:10px; color:var(--ink-dim); letter-spacing:0.5px; }
+  .agent-verdict{ font-family:var(--display); font-size:13.5px; font-weight:600; margin-top:2px; }
+  .agent-verdict.go{ color:var(--go); }
+  .agent-verdict.caution{ color:var(--caution); }
+  .agent-verdict.nogo{ color:var(--nogo); }
+  .agent-evidence{ font-size:11.5px; color:var(--ink-dim); margin-top:3px; line-height:1.45; }
+  .agent-conf{ font-family:var(--mono); font-size:10.5px; color:var(--ink-dim); margin-left:auto; flex-shrink:0; padding-top:1px; }
+
+  /* ---------- TRUST CARD ---------- */
+  .trust-section{ padding:18px 20px 28px; flex:1; }
+  .trust-card{
+    border:1px solid var(--border); border-radius:16px; padding:22px;
+    background:var(--panel-2);
+    backdrop-filter:blur(10px);
+    position:relative; overflow:hidden;
+    transition:border-color 0.4s ease, box-shadow 0.4s ease;
+  }
+  .trust-card::before{
+    content:'ORCA TRUST CARD'; position:absolute; top:12px; right:16px;
+    font-family:var(--mono); font-size:8.5px; letter-spacing:1.6px; color:var(--ink-faint);
+  }
+  .trust-card[data-status="go"]{ border-color:rgba(51,230,166,0.35); box-shadow:0 0 32px rgba(51,230,166,0.06) inset; }
+  .trust-card[data-status="caution"]{ border-color:rgba(255,182,72,0.35); box-shadow:0 0 32px rgba(255,182,72,0.06) inset; }
+  .trust-card[data-status="nogo"]{ border-color:rgba(255,93,108,0.35); box-shadow:0 0 32px rgba(255,93,108,0.06) inset; }
+
+  .compass-wrap{ display:flex; justify-content:center; margin-bottom:6px; position:relative; }
+  .compass{ width:176px; height:176px; overflow:visible; }
+  #needleGroup{ transform-origin:100px 100px; transition:transform 0.6s cubic-bezier(.4,1.4,.4,1); }
+  .compass-hub-label{ font-family:var(--display); font-weight:700; font-size:19px; }
+  .compass-hub-label.go{ fill:var(--go); }
+  .compass-hub-label.caution{ fill:var(--caution); }
+  .compass-hub-label.nogo{ fill:var(--nogo); }
+  .compass-hub-conf{ font-family:var(--mono); font-size:10px; fill:var(--ink-dim); }
+  .compass-region-label{ font-family:var(--mono); font-size:8.5px; letter-spacing:1px; fill:var(--ink-faint); }
+  .hub-pulse{ animation:hubPulse 2.6s ease-out infinite; transform-origin:100px 100px; }
+  @keyframes hubPulse{
+    0%{ opacity:0.5; transform:scale(1); }
+    100%{ opacity:0; transform:scale(1.42); }
+  }
+
+  .metric-grid{
+    display:grid; grid-template-columns:1fr 1fr; gap:10px;
+    margin-top:18px;
+  }
+  .metric{
+    background:var(--card); border:1px solid var(--border); border-radius:10px;
+    padding:10px 12px;
+  }
+  .metric .m-label{ font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.8px; color:var(--ink-dim); }
+  .metric .m-value{ font-family:var(--display); font-size:16.5px; font-weight:600; margin-top:4px; color:var(--ink); }
+
+  .why-toggle{
+    margin-top:16px; width:100%; text-align:left;
+    background:var(--card); border:1px solid var(--border); border-radius:10px;
+    padding:11px 14px; color:var(--ink); cursor:pointer;
+    font-family:var(--display); font-size:12.5px; font-weight:600;
+    display:flex; align-items:center; justify-content:space-between;
+    transition:border-color 0.15s ease, background 0.15s ease;
+  }
+  .why-toggle:hover{ border-color:var(--accent); background:rgba(47,230,196,0.05); }
+  .why-toggle .arrow{ transition:transform 0.2s ease; color:var(--accent); }
+  .why-toggle.open .arrow{ transform:rotate(90deg); }
+  .why-body{
+    max-height:0; overflow:hidden; transition:max-height 0.25s ease;
+  }
+  .why-body.open{ max-height:300px; margin-top:12px; }
+  .why-list{ list-style:none; display:flex; flex-direction:column; gap:8px; }
+  .why-list li{
+    font-size:12px; line-height:1.5; padding-left:19px; position:relative; color:var(--ink-dim);
+  }
+  .why-list li::before{
+    content:'\2713'; position:absolute; left:0; color:var(--go); font-family:var(--mono); font-size:11px;
+  }
+  .why-list li.but{ color:var(--ink); font-weight:600; }
+  .why-list li.but::before{ content:'\26A0'; color:var(--nogo); }
+
+  .timeline{ margin-top:16px; }
+  .timeline .t-eyebrow{ font-family:var(--mono); font-size:9px; letter-spacing:0.8px; text-transform:uppercase; color:var(--ink-dim); margin-bottom:9px; display:block; }
+  .t-row{
+    display:flex; align-items:center; gap:10px; padding:7px 0;
+    border-left:2px solid var(--border-2); padding-left:13px; margin-left:3px;
+    opacity:0; animation:agentIn 0.3s ease forwards;
+  }
+  .t-time{ font-family:var(--mono); font-size:11px; color:var(--ink-dim); width:44px; flex-shrink:0; }
+  .t-badge{ font-family:var(--display); font-size:10.5px; font-weight:700; padding:3px 9px; border-radius:20px; }
+  .t-badge.go{ background:var(--go-bg); color:var(--go); }
+  .t-badge.caution{ background:var(--caution-bg); color:var(--caution); }
+  .t-badge.nogo{ background:var(--nogo-bg); color:var(--nogo); }
+  .t-note{ font-size:11px; color:var(--ink-dim); }
+
+  /* ---------- RIGHT PANEL / MAP ---------- */
+  .right-panel{ position:relative; }
+  #map{ width:100%; height:100%; background:#0A1019; filter:saturate(1.05) brightness(0.98); }
+
+  .map-overlay-top{
+    position:absolute; top:16px; left:16px; z-index:500;
+    background:var(--panel); backdrop-filter:blur(10px);
+    border:1px solid var(--border); border-radius:12px;
+    padding:11px 15px; max-width:260px;
+  }
+  .map-overlay-top .loc-label{ font-family:var(--mono); font-size:9.5px; color:var(--ink-dim); letter-spacing:0.8px; text-transform:uppercase; }
+  .map-overlay-top .loc-value{ font-family:var(--display); font-size:14.5px; font-weight:600; margin-top:3px; color:var(--ink); }
+
+  .legend{
+    position:absolute; bottom:16px; left:16px; z-index:500;
+    background:var(--panel); backdrop-filter:blur(10px);
+    border:1px solid var(--border); border-radius:12px;
+    padding:10px 15px; display:flex; gap:16px;
+  }
+  .legend-item{ display:flex; align-items:center; gap:7px; font-family:var(--mono); font-size:10px; color:var(--ink-dim); }
+  .legend-dot{ width:8px; height:8px; border-radius:50%; }
+
+  .toast{
+    position:absolute; top:16px; right:16px; z-index:600;
+    background:var(--panel); border:1px solid var(--accent); border-radius:12px;
+    padding:12px 17px; display:flex; align-items:center; gap:11px;
+    backdrop-filter:blur(10px);
+    box-shadow:0 8px 28px rgba(0,0,0,0.45), 0 0 24px rgba(47,230,196,0.15);
+    transform:translateX(120%); transition:transform 0.35s ease;
+    max-width:300px;
+  }
+  .toast.show{ transform:translateX(0); }
+  .toast-dot{ width:8px; height:8px; border-radius:50%; background:var(--accent); flex-shrink:0; box-shadow:0 0 8px var(--accent); animation:pulse 1.4s infinite; }
+  .toast-text{ font-family:var(--body); font-size:12px; color:var(--ink); }
+  .toast-text b{ color:var(--accent); }
+
+  .leaflet-popup-content-wrapper{ background:#101826; color:var(--ink); border:1px solid var(--border-2); border-radius:10px; }
+  .leaflet-popup-tip{ background:#101826; }
+  .leaflet-popup-content{ font-family:var(--body); font-size:12px; }
+  .leaflet-control-zoom a{ background:#101826 !important; color:var(--ink) !important; border-color:var(--border-2) !important; }
+  .leaflet-control-attribution{ display:none !important; }
+</style>
+</head>
+<body>
+
+<div class="console">
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark"><span>OR</span></div>
+      <div class="brand-text">
+        <div class="name">ORCA&#8209;AI</div>
+        <div class="tagline">Fishing Safety Console</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="status-chip"><span class="pulse-dot"></span> LIVE &middot; SIMULATOR MODE</div>
+      <div class="scenario-switch">
+        <button data-scenario="normal" class="active">Demo 1 &middot; Normal</button>
+        <button data-scenario="conflict">Demo 2 &middot; Conflict</button>
+        <button data-scenario="replan">Demo 3 &middot; Replanning</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="main-grid">
+
+    <div class="left-panel">
+
+      <div class="query-section">
+        <span class="eyebrow">Ask ORCA</span>
+        <form class="query-form" id="queryForm">
+          <input type="text" class="query-input" id="queryInput" placeholder="Is it safe to go fishing tomorrow morning?">
+          <button type="submit" class="query-send">Ask</button>
+        </form>
+        <div class="chip-row">
+          <span class="chip" data-scenario="normal">Normal conditions</span>
+          <span class="chip" data-scenario="conflict">Great PFZ + storm approaching</span>
+          <span class="chip" data-scenario="replan">Start journey &amp; monitor</span>
+        </div>
+      </div>
+
+      <div class="feed-section">
+        <span class="eyebrow">Agent Trace</span>
+        <div id="agentFeed"></div>
+      </div>
+
+      <div class="trust-section">
+        <span class="eyebrow">Decision Record</span>
+        <div class="trust-card" id="trustCard" data-status="go">
+          <div class="compass-wrap">
+            <svg class="compass" viewBox="0 0 200 200">
+              <defs>
+                <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+                  <feGaussianBlur stdDeviation="3.2" result="blur"/>
+                  <feMerge>
+                    <feMergeNode in="blur"/>
+                    <feMergeNode in="SourceGraphic"/>
+                  </feMerge>
+                </filter>
+              </defs>
+              <circle cx="100" cy="100" r="95" fill="none" stroke="var(--border)" stroke-width="1"/>
+              <circle class="hub-pulse" cx="100" cy="100" r="38" fill="none" stroke="var(--accent)" stroke-width="1.5"/>
+              <path id="arcGo" d="M32.5,61 A78,78 0 0,1 167.5,61" fill="none" stroke="var(--go)" stroke-width="11" stroke-linecap="round" opacity="0.9" filter="url(#glow)"/>
+              <path id="arcCaution" d="M167.5,61 A78,78 0 0,1 100,178" fill="none" stroke="var(--caution)" stroke-width="11" stroke-linecap="round" opacity="0.9" filter="url(#glow)"/>
+              <path id="arcNogo" d="M100,178 A78,78 0 0,1 32.5,61" fill="none" stroke="var(--nogo)" stroke-width="11" stroke-linecap="round" opacity="0.9" filter="url(#glow)"/>
+              <text x="100" y="16" text-anchor="middle" class="compass-region-label">GO</text>
+              <text x="178" y="149" text-anchor="middle" class="compass-region-label">CAUTION</text>
+              <text x="22" y="149" text-anchor="middle" class="compass-region-label">NO-GO</text>
+              <g id="needleGroup">
+                <line x1="100" y1="100" x2="100" y2="35" stroke="var(--ink)" stroke-width="2" stroke-linecap="round"/>
+                <polygon points="100,28 95,42 105,42" fill="var(--accent)" filter="url(#glow)"/>
+              </g>
+              <circle cx="100" cy="100" r="38" fill="#0B121C" stroke="var(--border-2)" stroke-width="1.5"/>
+              <text id="beaconLabelSvg" x="100" y="103" text-anchor="middle" class="compass-hub-label go">GO</text>
+              <text id="beaconConfSvg" x="100" y="118" text-anchor="middle" class="compass-hub-conf">91%</text>
+            </svg>
+          </div>
+
+          <div class="metric-grid">
+            <div class="metric"><div class="m-label">Risk</div><div class="m-value" id="mRisk">LOW</div></div>
+            <div class="metric"><div class="m-label">Agent Agreement</div><div class="m-value" id="mAgree">96%</div></div>
+            <div class="metric"><div class="m-label">Evidence Freshness</div><div class="m-value" id="mFresh">96%</div></div>
+            <div class="metric"><div class="m-label">Query Time</div><div class="m-value" id="mTime">06:00</div></div>
+          </div>
+
+          <button class="why-toggle" id="whyToggle">
+            <span>WHY?</span><span class="arrow">&#9656;</span>
+          </button>
+          <div class="why-body" id="whyBody">
+            <ul class="why-list" id="whyList"></ul>
+          </div>
+
+          <div class="timeline" id="timelineWrap" style="display:none;">
+            <span class="t-eyebrow">Replanning Timeline</span>
+            <div id="timelineRows"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="right-panel">
+      <div id="map"></div>
+      <div class="map-overlay-top">
+        <div class="loc-label">Location</div>
+        <div class="loc-value">Mangaluru, Karnataka</div>
+      </div>
+      <div class="legend">
+        <div class="legend-item"><span class="legend-dot" style="background:#33E6A6;"></span>Safe</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#FFB648;"></span>Caution</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#FF5D6C;"></span>Hazardous</div>
+      </div>
+      <div class="toast" id="toast">
+        <span class="toast-dot"></span>
+        <span class="toast-text" id="toastText">Environment changed &mdash; <b>replanning</b>&hellip;</span>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<script src="https://unpkg.com/[email protected]/dist/leaflet.js"></script>
+<script>
+const MANGALURU = [12.9141, 74.8560];
+
+const map = L.map('map', { zoomControl:false, attributionControl:false }).setView(MANGALURU, 11);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom:18 }).addTo(map);
+L.control.zoom({ position:'bottomright' }).addTo(map);
+
+const userIcon = L.divIcon({
+  className:'', html:'<div style="width:14px;height:14px;border-radius:50%;background:#7C9CFF;border:2px solid #0B121C;box-shadow:0 0 0 4px rgba(124,156,255,0.25), 0 0 10px rgba(124,156,255,0.6);"></div>',
+  iconSize:[14,14], iconAnchor:[7,7]
+});
+L.marker(MANGALURU, { icon:userIcon }).addTo(map).bindPopup('Vessel start position<br>Mangaluru harbour');
+
+const pfz = L.circle([13.02, 74.62], { radius:6000, color:'#7C9CFF', weight:1.5, fillColor:'#7C9CFF', fillOpacity:0.09 })
+  .addTo(map).bindPopup('Potential Fishing Zone<br>SST 28.1&deg;C &middot; Chlorophyll: High');
+
+const restricted = L.polygon([[13.15,74.55],[13.20,74.50],[13.10,74.45],[13.05,74.52]], {
+  color:'#FF5D6C', weight:1.5, fillColor:'#FF5D6C', fillOpacity:0.07, dashArray:'4 4'
+}).addTo(map).bindPopup('Maritime boundary buffer');
+
+let routeLine, altRouteLine, riskZone;
+
+function drawRoute(color, coords){
+  if(routeLine) map.removeLayer(routeLine);
+  routeLine = L.polyline(coords, { color, weight:4, opacity:0.95 }).addTo(map);
+}
+function drawAltRoute(coords){
+  if(altRouteLine) map.removeLayer(altRouteLine);
+  altRouteLine = L.polyline(coords, { color:'#7E93AC', weight:2, dashArray:'6 6', opacity:0.7 }).addTo(map);
+}
+function clearRiskZone(){
+  if(riskZone){ map.removeLayer(riskZone); riskZone=null; }
+}
+function drawRiskZone(center, radius, color){
+  clearRiskZone();
+  riskZone = L.circle(center, { radius, color, weight:1, fillColor:color, fillOpacity:0.16 }).addTo(map);
+}
+
+const routeOut = [MANGALURU, [12.96,74.70], [13.00,74.63], [13.02,74.62]];
+const routeAlt = [MANGALURU, [12.90,74.75], [12.95,74.68]];
+const routeReturn = [[13.00,74.65],[12.96,74.66],MANGALURU];
+
+drawRoute('#33E6A6', routeOut);
+
+const SCENARIOS = {
+  normal: {
+    query:"Can I go fishing near Mangaluru tomorrow morning?",
+    time:"06:00",
+    decision:{ status:'go', label:'GO', confidence:91, risk:'LOW', agreement:'96%', freshness:'96%' },
+    agents:[
+      { name:'PLANNER AGENT', status:'go', verdict:'4 tasks dispatched', evidence:'check_weather, check_ocean, find_pfz, assess_risk', conf:null },
+      { name:'WEATHER AGENT', status:'go', verdict:'GO', evidence:'Wind 18 km/h &middot; Rain 10% &middot; Thunderstorm 5%', conf:'94%' },
+      { name:'OCEAN AGENT', status:'go', verdict:'GO', evidence:'Wave height 1.2m &middot; Current 0.4 kn', conf:'92%' },
+      { name:'MARINE/PFZ AGENT', status:'go', verdict:'GO', evidence:'SST 28.1&deg;C &middot; Chlorophyll high &middot; PFZ 15.4 km away', conf:'90%' },
+      { name:'RISK AGENT', status:'go', verdict:'GO &mdash; 91%', evidence:'No conflicting evidence &middot; all agents aligned', conf:'91%' },
+    ],
+    why:[
+      { text:'Wind speed within safe range (18 km/h)' },
+      { text:'Wave height low (1.2 m)' },
+      { text:'Thunderstorm probability negligible (5%)' },
+      { text:'PFZ favourable, 15.4 km from position' },
+      { text:'Safe route available and clear of boundary' },
+    ],
+    map:{ route:routeOut, alt:null, riskZone:null, routeColor:'#33E6A6' },
+    timeline:false
+  },
+  conflict: {
+    query:"Find me the safest fishing route tomorrow — PFZ looks excellent.",
+    time:"06:00",
+    decision:{ status:'nogo', label:'NO-GO', confidence:92, risk:'HIGH', agreement:'50%', freshness:'87%' },
+    agents:[
+      { name:'PFZ AGENT', status:'go', verdict:'GO', evidence:'Confidence 94% &middot; excellent chlorophyll signal', conf:'94%' },
+      { name:'WEATHER AGENT', status:'nogo', verdict:'NO-GO', evidence:'Thunderstorm probability 68%', conf:'89%' },
+      { name:'OCEAN AGENT', status:'caution', verdict:'CAUTION', evidence:'Wave height rising to 2.3 m', conf:'76%' },
+      { name:'NAVIGATION AGENT', status:'go', verdict:'GO', evidence:'Route geometry clear', conf:'91%' },
+      { name:'GEO AGENT', status:'go', verdict:'GO', evidence:'No boundary violation', conf:'88%' },
+      { name:'RISK AGENT', status:'nogo', verdict:'NO-GO &mdash; overrides majority', evidence:'Safety-critical evidence outranks opportunity (governance policy)', conf:'90%' },
+    ],
+    why:[
+      { text:'Thunderstorm probability 68%' },
+      { text:'Wave height 2.3 m' },
+      { text:'Weather evidence 12 minutes old' },
+      { text:'PFZ conditions favourable' },
+      { text:'Safe route exists' },
+      { text:'Safety risk overrides fishing opportunity', but:true },
+    ],
+    map:{ route:routeOut, alt:routeAlt, riskZone:{ center:[13.05,74.66], radius:5000, color:'#FF5D6C' }, routeColor:'#FF5D6C' },
+    timeline:false
+  },
+  replan: {
+    query:"Can I go fishing near Mangaluru this morning?",
+    time:"06:00",
+    decision:{ status:'go', label:'GO', confidence:88, risk:'LOW', agreement:'95%', freshness:'98%' },
+    agents:[
+      { name:'WEATHER AGENT', status:'go', verdict:'GO', evidence:'Wind 12 km/h &middot; Wave 1.1 m', conf:'93%' },
+      { name:'OCEAN AGENT', status:'go', verdict:'GO', evidence:'Conditions stable', conf:'90%' },
+      { name:'RISK AGENT', status:'go', verdict:'GO &mdash; 88%', evidence:'Environment nominal at 06:00', conf:'88%' },
+    ],
+    why:[
+      { text:'Wind 12 km/h, well within limits' },
+      { text:'Wave height 1.1 m' },
+      { text:'No storm signal at query time' },
+    ],
+    map:{ route:routeOut, alt:null, riskZone:null, routeColor:'#33E6A6' },
+    timeline:true,
+    timelineSteps:[
+      { time:'06:00', status:'go', note:'Wind 12 km/h &middot; Wave 1.1 m' },
+      { time:'07:15', status:'caution', note:'Wind 25 km/h &middot; Wave 2.0 m &mdash; route recalculated' },
+      { time:'07:45', status:'nogo', note:'Thunderstorm 78% &middot; Wave 2.8 m &mdash; RETURN route generated' },
+    ]
+  }
+};
+
+const NEEDLE_ANGLE = { go:0, caution:120, nogo:240 };
+
+const agentFeedEl = document.getElementById('agentFeed');
+const needleGroup = document.getElementById('needleGroup');
+const beaconLabelSvg = document.getElementById('beaconLabelSvg');
+const beaconConfSvg = document.getElementById('beaconConfSvg');
+const trustCard = document.getElementById('trustCard');
+const mRisk = document.getElementById('mRisk');
+const mAgree = document.getElementById('mAgree');
+const mFresh = document.getElementById('mFresh');
+const mTime = document.getElementById('mTime');
+const whyList = document.getElementById('whyList');
+const timelineWrap = document.getElementById('timelineWrap');
+const timelineRows = document.getElementById('timelineRows');
+const toastEl = document.getElementById('toast');
+const toastText = document.getElementById('toastText');
+const queryInput = document.getElementById('queryInput');
+
+let replanTimers = [];
+function clearReplanTimers(){ replanTimers.forEach(t=>clearTimeout(t)); replanTimers = []; }
+
+function showToast(html, ms=3200){
+  toastText.innerHTML = html;
+  toastEl.classList.add('show');
+  setTimeout(()=>toastEl.classList.remove('show'), ms);
+}
+
+function setBeacon(status, label, conf){
+  needleGroup.style.transform = `rotate(${NEEDLE_ANGLE[status]}deg)`;
+  beaconLabelSvg.textContent = label;
+  beaconLabelSvg.setAttribute('class', 'compass-hub-label ' + status);
+  beaconConfSvg.textContent = conf + '%';
+  trustCard.dataset.status = status;
+}
+
+function renderAgentFeed(agents){
+  agentFeedEl.innerHTML = '';
+  agents.forEach((a, i)=>{
+    const row = document.createElement('div');
+    row.className = 'agent-row';
+    row.style.animationDelay = (i*0.09)+'s';
+    row.innerHTML = `
+      <div class="agent-dot ${a.status}"></div>
+      <div class="agent-body">
+        <div class="agent-name">${a.name}</div>
+        <div class="agent-verdict ${a.status}">${a.verdict}</div>
+        <div class="agent-evidence">${a.evidence}</div>
+      </div>
+      ${a.conf ? `<div class="agent-conf">${a.conf}</div>` : ''}
+    `;
+    agentFeedEl.appendChild(row);
+  });
+}
+
+function renderWhy(items){
+  whyList.innerHTML = '';
+  items.forEach(w=>{
+    const li = document.createElement('li');
+    if(w.but) li.className='but';
+    li.textContent = w.text;
+    whyList.appendChild(li);
+  });
+}
+
+function renderMap(mapCfg){
+  drawRoute(mapCfg.routeColor, mapCfg.route);
+  if(mapCfg.alt){ drawAltRoute(mapCfg.alt); } else if(altRouteLine){ map.removeLayer(altRouteLine); altRouteLine=null; }
+  if(mapCfg.riskZone){ drawRiskZone(mapCfg.riskZone.center, mapCfg.riskZone.radius, mapCfg.riskZone.color); } else { clearRiskZone(); }
+}
+
+function loadScenario(key){
+  clearReplanTimers();
+  const s = SCENARIOS[key];
+  queryInput.value = '';
+  queryInput.placeholder = s.query;
+
+  renderAgentFeed(s.agents);
+  setBeacon(s.decision.status, s.decision.label, s.decision.confidence);
+  mRisk.textContent = s.decision.risk;
+  mAgree.textContent = s.decision.agreement;
+  mFresh.textContent = s.decision.freshness;
+  mTime.textContent = s.time;
+  renderWhy(s.why);
+  renderMap(s.map);
+
+  if(s.timeline){
+    timelineWrap.style.display = 'block';
+    timelineRows.innerHTML = '';
+    s.timelineSteps.forEach((step, i)=>{
+      const t = setTimeout(()=>{
+        const row = document.createElement('div');
+        row.className = 't-row';
+        row.innerHTML = `
+          <div class="t-time">${step.time}</div>
+          <div class="t-badge ${step.status}">${step.status.toUpperCase()}</div>
+          <div class="t-note">${step.note}</div>
+        `;
+        timelineRows.appendChild(row);
+        setBeacon(step.status, step.status.toUpperCase(), s.decision.confidence - (i*2));
+        mTime.textContent = step.time;
+
+        if(i===0){
+          renderMap({ routeColor:'#33E6A6', route:routeOut, alt:null, riskZone:null });
+        } else if(i===1){
+          showToast('Environment changed &mdash; <b>replanning route</b>&hellip;');
+          renderMap({ routeColor:'#FFB648', route:routeOut, alt:routeAlt, riskZone:{center:[13.02,74.66],radius:4000,color:'#FFB648'} });
+        } else if(i===2){
+          showToast('Thunderstorm detected &mdash; <b>generating RETURN route</b>&hellip;');
+          renderMap({ routeColor:'#FF5D6C', route:routeReturn, alt:null, riskZone:{center:[13.02,74.66],radius:6000,color:'#FF5D6C'} });
+        }
+      }, i*2600);
+      replanTimers.push(t);
+    });
+  } else {
+    timelineWrap.style.display = 'none';
+  }
+}
+
+document.querySelectorAll('.scenario-switch button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.scenario-switch button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    loadScenario(btn.dataset.scenario);
+  });
+});
+document.querySelectorAll('.chip').forEach(chip=>{
+  chip.addEventListener('click', ()=>{
+    const key = chip.dataset.scenario;
+    document.querySelectorAll('.scenario-switch button').forEach(b=>{
+      b.classList.toggle('active', b.dataset.scenario===key);
+    });
+    loadScenario(key);
+  });
+});
+
+document.getElementById('queryForm').addEventListener('submit', (e)=>{
+  e.preventDefault();
+  const text = queryInput.value.trim().toLowerCase();
+  let key = 'normal';
+  if(text.includes('storm') || text.includes('conflict') || text.includes('excellent') || text.includes('pfz')) key='conflict';
+  else if(text.includes('start') || text.includes('monitor') || text.includes('journey') || text.includes('replan')) key='replan';
+  document.querySelectorAll('.scenario-switch button').forEach(b=>{
+    b.classList.toggle('active', b.dataset.scenario===key);
+  });
+  loadScenario(key);
+});
+
+document.getElementById('whyToggle').addEventListener('click', function(){
+  this.classList.toggle('open');
+  document.getElementById('whyBody').classList.toggle('open');
+});
+
+loadScenario('normal');
+</script>
+</body>
+</html>
